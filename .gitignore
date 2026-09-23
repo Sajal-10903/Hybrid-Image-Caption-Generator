@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment Variables & Secrets
+.env
+*.env
+!.env.example
+
+# Model Artifacts & Precomputed Features
+image_captioning_model.h5
+vision_features.pkl
+*.h5
+*.keras
+
+# Dataset Images (keep dataset structure and links)
+dataset/Images/*.jpg
+dataset/Images/*.jpeg
+dataset/Images/*.png
+!dataset/Images/.gitkeep
+!dataset/Images/dataset_link.txt
+
+# Jupyter Notebook Checkpoints & Cache
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+
+# Testing & Scratch Artifacts
+test_sample.jpg

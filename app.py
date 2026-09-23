@@ -1,7 +1,9 @@
+import os
 import streamlit as st
 import numpy as np
 import pickle
 from PIL import Image
+from dotenv import load_dotenv
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -11,6 +13,14 @@ from ultralytics import YOLO
 from deep_translator import GoogleTranslator
 import google.generativeai as genai
 from transformers import BlipProcessor, BlipForConditionalGeneration
+
+load_dotenv()
+
+def safe_translate(text, target='hi'):
+    try:
+        return GoogleTranslator(source='en', target=target).translate(text)
+    except Exception as e:
+        return f"[Translation unavailable: {e}]"
 
 st.set_page_config(page_title="Hybrid Image Captioning System", layout="wide")
 
@@ -41,7 +51,13 @@ def load_all_models():
     outputs = tf.keras.layers.Dense(vocab_size, activation='softmax')(decoder2)
 
     caption_model = tf.keras.models.Model(inputs=[inputs1, inputs2], outputs=outputs)
-    caption_model.load_weights('image_captioning_model.h5')
+    if os.path.exists('image_captioning_model.h5'):
+        try:
+            caption_model.load_weights('image_captioning_model.h5')
+        except Exception:
+            caption_model = None
+    else:
+        caption_model = None
     
     vgg_model = VGG16()
     vgg_model = Model(inputs=vgg_model.inputs, outputs=vgg_model.layers[-2].output)
@@ -104,6 +120,9 @@ def get_multiple_captions(model, image_features, tokenizer, max_length, beam_wid
 tab1, tab2 = st.tabs(["Live Analysis Dashboard", "Session History"])
 
 with tab1:
+    if model is None:
+        st.info("ℹ️ Custom CNN-LSTM weights (`image_captioning_model.h5`) are not loaded. Other models (YOLOv8, BLIP, Gemini) remain fully functional. To enable the custom model, train it via `Image_Caption_Generator.ipynb` or place `image_captioning_model.h5` in the project root.")
+    
     st.markdown("### Input Layer")
     uploaded_file = st.file_uploader("Upload Image for Multi-Stage Analysis", type=['jpg', 'jpeg', 'png'], label_visibility="collapsed")
 
@@ -130,16 +149,21 @@ with tab1:
                 image_arr = preprocess_input(image_arr)
                 feature = vgg_model.predict(image_arr, verbose=0)
                 
-                caption_options = get_multiple_captions(model, feature, tokenizer, max_length, beam_width=3)
-                best_caption, best_confidence = caption_options[0]
-                
-                hindi_caption_base = GoogleTranslator(source='en', target='hi').translate(best_caption)
+                if model is not None:
+                    caption_options = get_multiple_captions(model, feature, tokenizer, max_length, beam_width=3)
+                    best_caption, best_confidence = caption_options[0]
+                    hindi_caption_base = safe_translate(best_caption)
+                else:
+                    best_caption = "Custom weights not found ('image_captioning_model.h5')"
+                    best_confidence = 0.0
+                    hindi_caption_base = "कस्टम मॉडल वेट्स अनुपलब्ध हैं"
+                    caption_options = [(best_caption, 0.0)]
 
                 blip_inputs = blip_processor(image, return_tensors="pt")
                 blip_out = blip_model.generate(**blip_inputs)
                 blip_caption = blip_processor.decode(blip_out[0], skip_special_tokens=True).capitalize()
                 
-                hindi_caption_blip = GoogleTranslator(source='en', target='hi').translate(blip_caption)
+                hindi_caption_blip = safe_translate(blip_caption)
                 
                 st.session_state.history.append({
                     "image": image,
@@ -163,17 +187,20 @@ with tab1:
                 
                 with col3:
                     st.markdown("#### Generative AI Contextualization")
-                    try:
-                        MY_GEMINI_KEY = "YOUR_API_KEY_HERE" 
-                        genai.configure(api_key=MY_GEMINI_KEY)
-                        llm = genai.GenerativeModel('gemini-2.5-flash')
-                        
-                        prompt = "Perform a detailed visual analysis. Identify primary subjects, background context, and any visible text. Provide one professional English description and one formal Hindi description. Output must be pure text without any emojis or decorative characters."
-                        
-                        response = llm.generate_content([prompt, image])
-                        st.info(response.text)
-                    except Exception as e:
-                        st.error(f"LLM Integration Error: {e}")
+                    gemini_api_key = os.environ.get("GEMINI_API_KEY")
+                    if gemini_api_key and gemini_api_key.strip() and gemini_api_key.strip() != "YOUR_API_KEY_HERE":
+                        try:
+                            genai.configure(api_key=gemini_api_key.strip())
+                            llm = genai.GenerativeModel('gemini-2.5-flash')
+                            
+                            prompt = "Perform a detailed visual analysis. Identify primary subjects, background context, and any visible text. Provide one professional English description and one formal Hindi description. Output must be pure text without any emojis or decorative characters."
+                            
+                            response = llm.generate_content([prompt, image])
+                            st.info(response.text)
+                        except Exception as e:
+                            st.error(f"LLM Integration Error: {e}")
+                    else:
+                        st.info("ℹ️ Gemini LLM contextualization requires `GEMINI_API_KEY`. Set `GEMINI_API_KEY` in your environment or a `.env` file to enable this analysis.")
 
                     st.markdown("---")
 

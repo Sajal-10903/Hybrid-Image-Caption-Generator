@@ -77,51 +77,91 @@ These are modest numbers, as expected from a small model trained for 5 epochs on
 
 ## 🚀 Run it
 
+### Prerequisites
+
+- **Python:** 3.11 recommended (supported with TensorFlow, PyTorch, and Transformers)
+- **Virtual Environment:** Strongly recommended
+
+### 1. Clone & Install Dependencies
+
 ```bash
-git clone https://github.com/Sajal-10903/Image_Caption_Generator.git
-cd Image_Caption_Generator
+git clone https://github.com/Sajal-10903/Hybrid-Image-Caption-Generator.git
+cd Hybrid-Image-Caption-Generator
+
+# Create and activate virtual environment
+python -m venv .venv
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# On Linux/macOS:
+source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-**1. Get the data.** Download the Flickr8k images from the link in `dataset/Images/dataset_link.txt` into `dataset/Images/` (`dataset/captions.txt` is included).
+### 2. Configure Environment Variables
 
-**2. Train the custom model.** Run `Image_Caption_Generator.ipynb` top to bottom. It extracts features, builds the tokenizer, trains the model and saves `image_captioning_model.h5`.
+The application securely reads `GEMINI_API_KEY` from the environment or a local `.env` file (loaded via `python-dotenv`).
 
-> The trained weights (`image_captioning_model.h5`) are **not included** in this repo, so the app needs this step before it will start. `tokenizer.pkl` and `yolov8n.pt` are included.
+```bash
+# Copy example configuration template
+cp .env.example .env
+```
 
-**3. Add your Gemini key.** In `app.py`, replace `YOUR_API_KEY_HERE` with your key from [Google AI Studio](https://aistudio.google.com/). Never commit a real key.
+Open `.env` and set your API key from [Google AI Studio](https://aistudio.google.com/):
 
-**4. Launch.**
+```dotenv
+GEMINI_API_KEY=your_actual_api_key_here
+```
+
+*(If you do not configure `GEMINI_API_KEY`, YOLOv8 object detection, BLIP captioning, and Hindi translation remain fully functional; the Gemini contextualization card will display an informational notice instead).*
+
+### 3. Model Weights (`image_captioning_model.h5`)
+
+The project uses multiple models:
+- **YOLOv8n** (`yolov8n.pt`): Pre-trained weights included in the repository.
+- **BLIP** (`Salesforce/blip-image-captioning-base`): Automatically downloads from Hugging Face on first run.
+- **Custom CNN-LSTM** (`image_captioning_model.h5`): 
+  - Trained from scratch on Flickr8k features extracted with VGG16.
+  - Due to file size (~70 MB), the binary weights are not bundled in Git.
+  - To train: Download the Flickr8k images into `dataset/Images/` (see `dataset/Images/dataset_link.txt`) and run `Image_Caption_Generator.ipynb` top to bottom. It will save `image_captioning_model.h5` directly into the project root.
+  - Alternatively, if you already have trained weights, place `image_captioning_model.h5` directly in the project root directory.
+  - If `image_captioning_model.h5` is not present, the app starts gracefully without crashing, displays an informational notice for the custom model, and runs the other three AI systems (YOLOv8, BLIP, and Gemini).
+
+### 4. Launch Application
 
 ```bash
 streamlit run app.py
 ```
-
-BLIP weights download from Hugging Face on first run.
 
 ---
 
 ## 📂 Project structure
 
 ```text
-Image_Caption_Generator/
-├── Image_Caption_Generator.ipynb   # feature extraction, training, BLEU evaluation
-├── app.py                          # Streamlit hybrid inference app
-├── tokenizer.pkl                   # fitted tokenizer
-├── yolov8n.pt                      # YOLOv8 nano weights
-├── dataset/                        # captions.txt + image download link
-└── requirements.txt
+Hybrid-Image-Caption-Generator/
+├── .env.example                    # Environment template for GEMINI_API_KEY
+├── .gitignore                      # Git exclusion rules for artifacts & secrets
+├── Image_Caption_Generator.ipynb   # Feature extraction, training, BLEU evaluation
+├── app.py                          # Streamlit hybrid inference dashboard
+├── tokenizer.pkl                   # Fitted Keras tokenizer (8,485 vocabulary)
+├── yolov8n.pt                      # Ultralytics YOLOv8 nano weights
+├── dataset/
+│   ├── captions.txt                # 40,456 Flickr8k captions
+│   └── Images/
+│       ├── .gitkeep
+│       └── dataset_link.txt        # Link to Kaggle Flickr8k images
+└── requirements.txt                # Production dependencies
 ```
 
 ---
 
 ## ⚠️ Limitations
 
-- The custom CNN-LSTM is small and trained briefly; its captions are often generic. Use the BLIP and Gemini outputs as the quality reference.
-- Gemini analysis and Hindi translation need internet access; translation uses a third-party wrapper, so quality is not human-verified.
-- BLEU was measured with greedy decoding, while the app uses beam search, so the app's captions are not covered by the reported scores.
-- Trained weights are not shipped; you have to run the notebook first.
-- No evaluation was run on BLIP or Gemini outputs.
+- **Custom CNN-LSTM Weights:** Model weights (`image_captioning_model.h5`) are generated by running `Image_Caption_Generator.ipynb` and are not checked into Git history. When absent, the dashboard runs YOLOv8 and BLIP and indicates the custom weights are unpopulated.
+- **Gemini LLM Integration:** Requires an active `GEMINI_API_KEY` from Google AI Studio and an internet connection.
+- **Hindi Translation:** Relies on `deep-translator` (Google Translate web service), which requires internet connectivity and may occasionally encounter rate limits.
+- **BLEU Evaluation:** BLEU was measured in the training notebook using greedy decoding, while the Streamlit application utilizes beam search (width = 3) for inference.
 
 ---
 
